@@ -2039,11 +2039,6 @@ static void decode_block_to_debloat(struct ptxed_decoder *decoder,
     memset(ind_inst_array, 0, NUM_IND_INST * sizeof(struct ind_inst));
 
 
-
-    /* Let's initilize our own decoder */
-    pt_ild_init();
-
-
     iscache = decoder->iscache;
     ptdec = decoder->variant.block;
     offset = 0ull;

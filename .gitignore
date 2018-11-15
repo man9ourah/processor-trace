@@ -1,4 +1,6 @@
 *.lst
+build/
+xed_files/
 *.bin
 *.pt
 *.sb
