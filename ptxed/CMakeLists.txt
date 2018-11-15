@@ -43,6 +43,7 @@ link_directories(
 set(PTXED_FILES
   src/ptxed.c
   ../libipt/src/pt_cpu.c
+  ../libipt/src/pt_ild.c
 )
 
 if (CMAKE_HOST_UNIX)

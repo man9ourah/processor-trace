@@ -84,7 +84,7 @@ if (SIDEBAND)
 endif (SIDEBAND)
 
 if (PTXED OR PEVENT)
-  option(FEATURE_ELF "Support ELF files." OFF)
+	option(FEATURE_ELF "Support ELF files." ON)
 endif (PTXED OR PEVENT)
 
 set(PTT OFF)
@@ -138,12 +138,12 @@ if (PEVENT)
 endif (PEVENT)
 
 
-function(add_cflag_if_available option guard)
+function(add_cflag_if_available option)
 
-  check_c_compiler_flag(${option} ${guard})
-  if (${guard})
+  check_c_compiler_flag(${option} ${option}_supported)
+  if (${option}_supported)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${option}" PARENT_SCOPE)
-  endif (${guard})
+  endif (${option}_supported)
 
 endfunction(add_cflag_if_available)
 
@@ -243,10 +243,7 @@ if (CMAKE_HOST_UNIX)
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wextra")
       set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pedantic")
 
-      add_cflag_if_available("-Wimplicit-fallthrough=5"
-        HAVE_C_Wimplicit_fallthrough)
-      add_cflag_if_available("-Wno-format-truncation"
-        HAVE_C_Wno_format_truncation)
+      add_cflag_if_available("-Wimplicit-fallthrough=5")
     endif (CMAKE_C_COMPILER_ID MATCHES "[Cc]lang")
 
     # warnings are errors
