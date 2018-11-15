@@ -57,10 +57,10 @@
 #define BLK_IDENT "+B+"
 #define CND_IDENT "+CND+"
 #define IND_IDENT "+IND+"
-#define NUM_CND_INST 20000
-#define NUM_IND_INST 20000
+#define NUM_CND_INST 5000
+#define NUM_IND_INST 5000
 #define NUM_IND_HOPS 500
-#define NUM_BLOCKS 20000
+#define NUM_BLOCKS 5000
 #define BRANCH_TAKEN 1
 #define BRANCH_NOT_TAKEN 2
 #define BRANCH_BOTH 3
