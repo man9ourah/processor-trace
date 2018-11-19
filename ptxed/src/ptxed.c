@@ -1769,7 +1769,7 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
 static int is_branch_inst_seen(uint64_t ip)
 {
     for (int i =0; i<NUM_CND_INST; i++){
-	if(cnd_inst_array[i].ip == 0)
+	if(cnd_inst_array[i].ip == 0 && cnd_inst_cu==i)
 	    return -1;
         if(ip == cnd_inst_array[i].ip)
             return i;
@@ -1780,7 +1780,7 @@ static int is_branch_inst_seen(uint64_t ip)
 static int is_ind_inst_seen(uint64_t ip)
 {
     for (int i =0; i <NUM_IND_INST; i++) {
-	if(ind_inst_array[i].ip == 0)
+	if(ind_inst_array[i].ip == 0 && ind_inst_cu == i)
 	    return -1;
         if(ip == ind_inst_array[i].ip)
             return i;
@@ -1801,14 +1801,14 @@ static int is_block_seen(uint64_t start, uint64_t end)
 
 
    for (int i =0; i<NUM_BLOCKS; i++){
-	if(blocks_array[i].start == 0)
+	if(blocks_array[i].start == 0 && blocks_array[i].end == 0 && block_range_cu == i)
 	    return 0;
 
 	if(start ==  blocks_array[i].start && end == blocks_array[i].end){
 
 	   // Exact match
            return 1;
-
+/*
         }else if(start ==  blocks_array[i].start || end == blocks_array[i].end) {
 
 	    // Start or end match, but not both, expand current block
@@ -1845,6 +1845,7 @@ static int is_block_seen(uint64_t start, uint64_t end)
 	    blocks_array[i].start = start;
 	    blocks_array[i].end = end;
 	    return 1;
+	*/
 	}
     }
     return 0;
