@@ -1808,7 +1808,7 @@ static int is_block_seen(uint64_t start, uint64_t end)
 
 	   // Exact match
            return 1;
-/*
+
         }else if(start ==  blocks_array[i].start || end == blocks_array[i].end) {
 
 	    // Start or end match, but not both, expand current block
@@ -1845,7 +1845,7 @@ static int is_block_seen(uint64_t start, uint64_t end)
 	    blocks_array[i].start = start;
 	    blocks_array[i].end = end;
 	    return 1;
-	*/
+	
 	}
     }
     return 0;
