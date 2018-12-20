@@ -22,6 +22,6 @@ if __name__ == '__main__':
 	xed_include = os.path.join(xed_built, "include/xed")
 	execute("mkdir build", current_path)
 	build = os.path.join(current_path, "build")
-	execute("cmake -DPTXED=ON -DXED_INCLUDE={} -DXED_LIBDIR={} -DSIDEBAND=ON -DPEVENT=ON ../".format(xed_include, xed_lib), build)
-	execute("make ptxed", build)
+	execute("cmake -DPTUNIT=ON -DPTTC=ON -DPTDUMP=ON -DPTXED=ON -DXED_INCLUDE={} -DXED_LIBDIR={} -DSIDEBAND=ON -DPEVENT=ON -DFEATURE_ELF=ON ../".format(xed_include, xed_lib), build)
+	execute("make", build)
 	log("Decoder: {}/bin/ptxed".format(build))

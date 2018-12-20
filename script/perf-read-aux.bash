@@ -95,6 +95,7 @@ fi
 
 perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
   function handle_auxtrace(offset, hsize, size, idx) {
+    ibs = 1024 * 1024
     ext = ""
 
     if (snapshot != 0) {
@@ -107,8 +108,26 @@ perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
     ofile = sprintf("%s-aux-idx%d%s.bin", base, idx, ext)
     begin = offset + hsize
 
-    cmd = sprintf("dd if=%s of=%s conv=notrunc oflag=append ibs=1 skip=%d " \
-                  "count=%d status=none", file, ofile, begin, size)
+    count = size / ibs
+    left = size % ibs
+    cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
+                  "oflag=append ibs=%d skip=%d count=%d status=none",
+                  file, ofile, ibs, begin, count)
+
+    if (dry_run != 0) {
+      print cmd
+    }
+    else {
+      system(cmd)
+    }
+
+    count = 1
+    ibs = left
+    begin = begin + size - left
+    cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
+                  "oflag=append,seek_bytes ibs=%d skip=%d " \
+                  "count=%d status=none seek=%d", \
+                  file, ofile, ibs, begin, count, size -left)
 
     if (dry_run != 0) {
       print cmd
