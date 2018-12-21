@@ -89,18 +89,69 @@ fi
 
 
 perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
+  BEGIN { 
+    print "BEGIN" 
+  }
+
+  function do_copy(ofile, offset, size) {
+    ibs = 1024 * 1024
+
+    begin = offset
+    count = size / ibs
+    left = size % ibs
+    
+    if ( int(count) != 0) {
+      cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
+                    "oflag=append ibs=%d skip=%d count=%d status=none", 
+                    file, ofile, ibs, begin, count)
+
+      if (dry_run != 0) {
+        print cmd
+      }
+      else {
+        system(cmd)
+      }
+    }
+
+    
+    count = 1
+    ibs = left
+    begin = begin + size - left
+
+    if (ibs != 0) {
+      cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
+                    "oflag=append ibs=%d skip=%d " \
+                    "count=%d status=none", \
+                    file, ofile, ibs, begin, count)
+
+      if (dry_run != 0) {
+        print cmd
+      }
+      else {
+        system(cmd)
+      }
+    }
+  }
+
   function handle_record(ofile, offset, size) {
-    cmd = sprintf("dd if=%s of=%s conv=notrunc oflag=append ibs=1 skip=%d " \
-                  "count=%d status=none", file, ofile, offset, size)
+    if ( ofile in offset_dict ) {
+      old_offset = offset_dict[ofile]
+      old_size = size_dict[ofile]
+      old_end = old_offset + old_size
 
-    if (dry_run != 0) {
-      print cmd
-    }
+      if ( old_end == offset ) {
+        size_dict[ofile] = old_size + size
+      } 
+      else {
+        do_copy(ofile, old_offset, old_size)
+        offset_dict[ofile] = offset
+        size_dict[ofile] = size
+      }
+    } 
     else {
-      system(cmd)
+      offset_dict[ofile] = offset
+      size_dict[ofile] = size
     }
-
-    next
   }
 
   function handle_global_record(offset, size) {
@@ -147,4 +198,15 @@ perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
 
     handle_global_record(begin, size)
   }
+  
+  END {
+    print "END" 
+
+    for ( afile in offset_dict ) {
+      old_offset = offset_dict[afile]
+      old_size = size_dict[afile]
+      do_copy(afile, old_offset, old_size)
+    }
+  }
+
 ' file="$file" base="$base" dry_run="$dry_run"

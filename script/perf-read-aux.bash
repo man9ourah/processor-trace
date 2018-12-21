@@ -110,30 +110,36 @@ perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
 
     count = size / ibs
     left = size % ibs
-    cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
-                  "oflag=append ibs=%d skip=%d count=%d status=none",
-                  file, ofile, ibs, begin, count)
 
-    if (dry_run != 0) {
-      print cmd
-    }
-    else {
-      system(cmd)
+    if ( int(count) != 0) {
+      cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
+                    "oflag=append ibs=%d skip=%d count=%d status=none",
+                    file, ofile, ibs, begin, count)
+
+      if (dry_run != 0) {
+        print cmd
+      }
+      else {
+        system(cmd)
+      }
     }
 
     count = 1
     ibs = left
     begin = begin + size - left
-    cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
-                  "oflag=append,seek_bytes ibs=%d skip=%d " \
-                  "count=%d status=none seek=%d", \
-                  file, ofile, ibs, begin, count, size -left)
 
-    if (dry_run != 0) {
-      print cmd
-    }
-    else {
-      system(cmd)
+    if (ibs != 0) {
+      cmd = sprintf("dd if=%s of=%s conv=notrunc iflag=skip_bytes " \
+                    "oflag=append,seek_bytes ibs=%d skip=%d " \
+                    "count=%d status=none seek=%d", \
+                    file, ofile, ibs, begin, count, size -left)
+
+      if (dry_run != 0) {
+        print cmd
+      }
+      else {
+        system(cmd)
+      }
     }
   }
 
