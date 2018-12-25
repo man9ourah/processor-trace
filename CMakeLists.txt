@@ -221,7 +221,7 @@ if (CMAKE_HOST_UNIX)
 
   # set the language
   #
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -g")
 
   # windows-like dll export model
   #
