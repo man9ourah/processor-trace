@@ -69,7 +69,7 @@
 #define BRANCH_BOTH 3
 
 //HH: we only support 20M binary
-#define MAX_BIN_SIZE ((1 << 20) * 10)
+#define MAX_BIN_SIZE ((1 << 20) * 20)
 
 // Conditional instructions
 struct cnd_inst {
@@ -112,10 +112,10 @@ struct block {
 // each element corresponding to one byte in code
 struct block block_map[MAX_BIN_SIZE];
 
-uint8_t cnd_inst_map[MAX_BIN_SIZE];    // 0 - not a conditional branch / not executed before
-                                       // 1 - taken
-                                       // 2 - non-taken
-                                       // 3 - both
+uint8_t branch_map[MAX_BIN_SIZE]; // 0 - not a conditional branch / not executed before
+                                  // 1 - taken
+                                  // 2 - non-taken
+                                  // 3 - both
 struct icall_inst {
   uint64_t dest_ip;
   struct icall_inst * next;
@@ -1836,6 +1836,11 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
 }
 
 
+//HH: update_branch_map
+static inline int update_branch_map(uint64_t ip, uint8_t tnt) {
+  branch_map[ip - load_base] |= tnt;
+}
+
 static int is_branch_inst_seen(uint64_t ip)
 {
   for (int i =0; i<NUM_CND_INST; i++){
@@ -2128,12 +2133,15 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
       branch_ip += (uint64_t) (int64_t) iext.variant.branch.displacement;
 
       // Was this branch taken?
-      int taken;
+      uint8_t taken;
       if(branch_ip == next_ip)
         taken = BRANCH_TAKEN;
       else
         taken = BRANCH_NOT_TAKEN;
 
+#if 1
+      update_branch_map(insn.ip, taken);
+#else
       // Did we see this inst before?
       int cnd_inst_index = is_branch_inst_seen(insn.ip);
       if( cnd_inst_index == -1) {
@@ -2158,6 +2166,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
               cnd_inst_array[i].taken);
         cnd_inst_cu = 0;
       }
+#endif
     }
     // All classes of jump/call
     case ptic_jump:
@@ -2213,7 +2222,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
 }
 
 static void print_block_map() {
-  for (uint64_t index = first_block_start; index < last_block_end; index++) {
+  for (uint64_t index = first_block_start; index <= last_block_end; index++) {
     if (block_map[index].is_block_entry) {
       printf(BLK_IDENT " 0x%lx 0x%lx\n", index + load_base, 
                                          block_map[index].value.end + load_base);
@@ -2227,17 +2236,27 @@ static void print_block_map() {
   }
 }
 
+static void print_branch_map() {
+  for (uint64_t index = first_block_start; index <= last_block_end; index++) {
+    if (!block_map[index].is_block_entry && !block_map[index].is_in_block)
+      continue;
+    if (branch_map[index] != 0)
+      printf(CND_IDENT " 0x%lx %d\n", index + load_base, branch_map[index]);
+  }
+}
+
 static void print_cnd_ind_blocks()
 {
 
   //HH:
   print_block_map();
+  print_branch_map();
 
   //for (int i =0; i<block_range_cu; i++)
   //  printf(BLK_IDENT " 0x%lx 0x%lx\n", blocks_array[i].start, blocks_array[i].end);
 
-  for (int i =0; i<cnd_inst_cu; i++)
-    printf(CND_IDENT " 0x%lx %d\n", cnd_inst_array[i].ip, cnd_inst_array[i].taken);
+  //for (int i =0; i<cnd_inst_cu; i++)
+  //  printf(CND_IDENT " 0x%lx %d\n", cnd_inst_array[i].ip, cnd_inst_array[i].taken);
 
   for (int i =0; i <ind_inst_cu; i++) {
     printf(IND_IDENT " 0x%lx " , ind_inst_array[i].ip);
