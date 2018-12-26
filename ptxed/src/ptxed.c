@@ -2090,26 +2090,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
     return decoder_status;
   range_end = block->end_ip + xed_decoded_inst_get_length(&inst) -1;
 
-#if 1
   update_block_map(range_start, range_end);
-#else
-  /* Let's add block to array */
-  if(!is_block_seen(range_start, range_end)) {
-
-    blocks_array[block_range_cu].start = range_start;
-    blocks_array[block_range_cu].end = range_end;
-    block_range_cu++;
-  }
-
-  /* if array is full, print current and zero cursor*/
-  if(block_range_cu == NUM_BLOCKS) {
-    for (int i =0; i<NUM_BLOCKS; i++)
-      printf(BLK_IDENT " 0x%lx 0x%lx\n", blocks_array[i].start, blocks_array[i].end);
-
-
-    block_range_cu = 0;
-  }
-#endif
 
   /* We need to know how this block ended? */
 
@@ -2146,34 +2127,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
       else
         taken = TNT_NT;
 
-#if 1
       update_branch_map(insn.ip, taken);
-#else
-      // Did we see this inst before?
-      int cnd_inst_index = is_branch_inst_seen(insn.ip);
-      if( cnd_inst_index == -1) {
-
-        cnd_inst_array[cnd_inst_cu].ip = insn.ip;
-        cnd_inst_array[cnd_inst_cu].taken = taken;
-        cnd_inst_cu++;
-
-      } else {
-        // if the instruction is both, ignore it
-        // if the TNT is the same as before, ignore it
-        if(cnd_inst_array[cnd_inst_index].taken == BRANCH_BOTH || 
-           cnd_inst_array[cnd_inst_index].taken == taken)
-          break;
-
-        cnd_inst_array[cnd_inst_index].taken = BRANCH_BOTH;
-      }
-
-      if(cnd_inst_cu == NUM_CND_INST) {
-        for (int i =0; i<NUM_CND_INST; i++)
-          printf(CND_IDENT " 0x%lx %d\n", cnd_inst_array[i].ip, 
-              cnd_inst_array[i].taken);
-        cnd_inst_cu = 0;
-      }
-#endif
 
       break;
     }
@@ -2187,44 +2141,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
       if (iext.variant.branch.is_direct)
         break;
 
-#if 1
       update_icall_map(insn.ip, next_ip);
-#else
-      //HH: have we seen it before?
-      int ind_inst_index = is_ind_inst_seen(insn.ip);
-      if (ind_inst_index == -1) {
-
-        ind_inst_array[ind_inst_cu].ip = insn.ip;
-
-        if (ind_inst_array[ind_inst_cu].dest_ips_length > 0)
-          for (int k = 0; k < NUM_IND_HOPS; k++)
-            ind_inst_array[ind_inst_cu].dest_ips[k] = 0;
-
-        ind_inst_array[ind_inst_cu].dest_ips[0] = next_ip;
-        ind_inst_array[ind_inst_cu].dest_ips_length = 1;
-        ind_inst_cu++;
-
-      } else {
-
-        if(!is_ind_dest_seen(ind_inst_index, next_ip)){
-
-          uint64_t num_dests = ind_inst_array[ind_inst_index].dest_ips_length;
-          ind_inst_array[ind_inst_index].dest_ips[num_dests] = next_ip;
-          ind_inst_array[ind_inst_index].dest_ips_length += 1;
-
-        }
-      }
-
-      if(ind_inst_cu == NUM_IND_INST) {
-        for (int i =0; i <NUM_IND_INST; i++) {
-          printf(IND_IDENT " 0x%lx " , ind_inst_array[i].ip);
-          for (int k=0; k < ind_inst_array[i].dest_ips_length; k++)
-            printf("0x%lx ", ind_inst_array[i].dest_ips[k]);
-          printf("\n");
-        }
-        ind_inst_cu = 0;
-      }
-#endif
 
       break;
     }
@@ -2272,25 +2189,11 @@ static void print_icall_map() {
   }
 }
 
-static void print_cnd_ind_blocks()
-{
+static void print_cnd_ind_blocks() {
   //HH:
   print_block_map();
   print_branch_map();
   print_icall_map();
-
-  //for (int i =0; i<block_range_cu; i++)
-  //  printf(BLK_IDENT " 0x%lx 0x%lx\n", blocks_array[i].start, blocks_array[i].end);
-
-  //for (int i =0; i<cnd_inst_cu; i++)
-  //  printf(CND_IDENT " 0x%lx %d\n", cnd_inst_array[i].ip, cnd_inst_array[i].taken);
-
-  //for (int i =0; i <ind_inst_cu; i++) {
-  //  printf(IND_IDENT " 0x%lx " , ind_inst_array[i].ip);
-  //  for (int k=0; k < ind_inst_array[i].dest_ips_length; k++)
-  //    printf("0x%lx ", ind_inst_array[i].dest_ips[k]);
-  //  printf("\n");
-  //}
 }
 
 //HH: this is the main function of decoding
