@@ -109,20 +109,22 @@ struct block {
   } value;                 // else meaningless
 };
 
-// each element corresponding to one byte in code
-struct block block_map[MAX_BIN_SIZE];
+enum tnt_type {
+  TNT_NONE,   // not a conditional branch / not executed yet
+  TNT_T,      // taken
+  TNT_NT,     // non-taken
+  TNT_TNT,    // both
+};
 
-uint8_t branch_map[MAX_BIN_SIZE]; // 0 - not a conditional branch / not executed before
-                                  // 1 - taken
-                                  // 2 - non-taken
-                                  // 3 - both
-struct icall_inst {
+struct icall {
   uint64_t dest_ip;
-  struct icall_inst * next;
+  struct icall *next;
 };
   
-struct icall_inst icall_map[MAX_BIN_SIZE];
-
+// each element corresponding to one byte in code
+struct block  block_map[MAX_BIN_SIZE];
+uint8_t      branch_map[MAX_BIN_SIZE];
+struct icall *icall_map[MAX_BIN_SIZE];
 
 /* Let's make curs of our structs:  */
 int cnd_inst_cu = 0;
@@ -1837,7 +1839,7 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
 
 
 //HH: update_branch_map
-static inline int update_branch_map(uint64_t ip, uint8_t tnt) {
+static inline int update_branch_map(uint64_t ip, enum tnt_type tnt) {
   branch_map[ip - load_base] |= tnt;
 }
 
@@ -2133,11 +2135,11 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
       branch_ip += (uint64_t) (int64_t) iext.variant.branch.displacement;
 
       // Was this branch taken?
-      uint8_t taken;
+      enum tnt_type taken;
       if(branch_ip == next_ip)
-        taken = BRANCH_TAKEN;
+        taken = TNT_T;
       else
-        taken = BRANCH_NOT_TAKEN;
+        taken = TNT_NT;
 
 #if 1
       update_branch_map(insn.ip, taken);
@@ -2247,7 +2249,6 @@ static void print_branch_map() {
 
 static void print_cnd_ind_blocks()
 {
-
   //HH:
   print_block_map();
   print_branch_map();
