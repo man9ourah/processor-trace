@@ -117,7 +117,7 @@ enum tnt_type {
 };
 
 struct icall {
-  uint64_t dest_ip;
+  uint64_t dst;
   struct icall *next;
 };
   
@@ -1843,15 +1843,20 @@ static inline int update_branch_map(uint64_t ip, enum tnt_type tnt) {
   branch_map[ip - load_base] |= tnt;
 }
 
-static int is_branch_inst_seen(uint64_t ip)
-{
-  for (int i =0; i<NUM_CND_INST; i++){
-    if(cnd_inst_array[i].ip == 0 && cnd_inst_cu==i)
-      return -1;
-    if(ip == cnd_inst_array[i].ip)
-      return i;
+//HH: update_icall_map
+static int update_icall_map(uint64_t src, uint64_t dst) {
+  struct icall * head = icall_map[src - load_base];
+
+  for (struct icall * next = head; next != NULL; next = next->next) {
+    if (next->dst == dst)
+      return 1;
   }
-  return 0;
+
+  struct icall * new = (struct icall *) malloc(sizeof(struct icall));
+  new->dst = dst;
+  new->next = head;
+  
+  icall_map[src - load_base] = new;
 }
 
 static int is_ind_inst_seen(uint64_t ip)
@@ -2169,6 +2174,8 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
         cnd_inst_cu = 0;
       }
 #endif
+
+      break;
     }
     // All classes of jump/call
     case ptic_jump:
@@ -2180,6 +2187,9 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
       if (iext.variant.branch.is_direct)
         break;
 
+#if 1
+      update_icall_map(insn.ip, next_ip);
+#else
       //HH: have we seen it before?
       int ind_inst_index = is_ind_inst_seen(insn.ip);
       if (ind_inst_index == -1) {
@@ -2214,6 +2224,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
         }
         ind_inst_cu = 0;
       }
+#endif
 
       break;
     }
@@ -2247,11 +2258,26 @@ static void print_branch_map() {
   }
 }
 
+static void print_icall_map() {
+  for (uint64_t index = first_block_start; index <= last_block_end; index++) {
+    if (!block_map[index].is_block_entry && !block_map[index].is_in_block)
+      continue;
+    if (icall_map[index] != 0) {
+      printf(IND_IDENT " 0x%lx ", index + load_base);
+      struct icall * head = icall_map[index];
+      for (struct icall * next = head; next != NULL; next = next->next)
+        printf("0x%lx ", next->dst);
+      printf("\n");
+    }
+  }
+}
+
 static void print_cnd_ind_blocks()
 {
   //HH:
   print_block_map();
   print_branch_map();
+  print_icall_map();
 
   //for (int i =0; i<block_range_cu; i++)
   //  printf(BLK_IDENT " 0x%lx 0x%lx\n", blocks_array[i].start, blocks_array[i].end);
@@ -2259,12 +2285,12 @@ static void print_cnd_ind_blocks()
   //for (int i =0; i<cnd_inst_cu; i++)
   //  printf(CND_IDENT " 0x%lx %d\n", cnd_inst_array[i].ip, cnd_inst_array[i].taken);
 
-  for (int i =0; i <ind_inst_cu; i++) {
-    printf(IND_IDENT " 0x%lx " , ind_inst_array[i].ip);
-    for (int k=0; k < ind_inst_array[i].dest_ips_length; k++)
-      printf("0x%lx ", ind_inst_array[i].dest_ips[k]);
-    printf("\n");
-  }
+  //for (int i =0; i <ind_inst_cu; i++) {
+  //  printf(IND_IDENT " 0x%lx " , ind_inst_array[i].ip);
+  //  for (int k=0; k < ind_inst_array[i].dest_ips_length; k++)
+  //    printf("0x%lx ", ind_inst_array[i].dest_ips[k]);
+  //  printf("\n");
+  //}
 }
 
 //HH: this is the main function of decoding
