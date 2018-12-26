@@ -103,6 +103,8 @@ uint64_t last_block_end = 0;
 struct block {
   uint8_t  is_block_entry;
   uint8_t  is_in_block;
+  uint32_t hack_cache;     // it is unlikely to process a binary larger than 32G,
+                           // so just hack this padding for cache;
   union {
     uint64_t end;          // if is_block_entry, the block end address
     uint64_t start;        // else if is_in_block, the block start address
@@ -1806,7 +1808,8 @@ static int get_disabled_event_ip(uint64_t *next_ip, struct ptxed_decoder *decode
   return status;
 }
 
-static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *block, struct pt_image_section_cache *iscache, xed_decoded_inst_t *inst)
+static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *block, 
+    struct pt_image_section_cache *iscache, xed_decoded_inst_t *inst)
 {
   xed_machine_mode_enum_t mode;
   xed_state_t xed;
@@ -1816,11 +1819,9 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
   mode = translate_mode(block->mode);
   xed_state_init2(&xed, mode, XED_ADDRESS_WIDTH_INVALID);
 
-
   errcode = block_fetch_insn(insn, block, block->end_ip, iscache);
   if (errcode < 0) {
-    printf(" [fetch error: %s]\n",
-        pt_errstr(pt_errcode(errcode)));
+    printf(" [fetch error: %s]\n", pt_errstr(pt_errcode(errcode)));
     return -1;
   }
 
@@ -1859,25 +1860,6 @@ static int update_icall_map(uint64_t src, uint64_t dst) {
   icall_map[src - load_base] = new;
 }
 
-static int is_ind_inst_seen(uint64_t ip)
-{
-  for (int i =0; i <NUM_IND_INST; i++) {
-    if(ind_inst_array[i].ip == 0 && ind_inst_cu == i)
-      return -1;
-    if(ip == ind_inst_array[i].ip)
-      return i;
-  }
-  return 0;
-}
-
-static int is_ind_dest_seen(int ind_inst_index, uint64_t ip)
-{
-  for (int k=0; k < ind_inst_array[ind_inst_index].dest_ips_length; k++)
-    if(ip ==  ind_inst_array[ind_inst_index].dest_ips[k])
-      return 1;
-  return 0;
-}
-
 //HH: create a new block region
 static int create_new_block(uint64_t start, uint64_t end) {
 
@@ -1890,6 +1872,7 @@ static int create_new_block(uint64_t start, uint64_t end) {
 
   block_map[start].is_block_entry = 1;
   block_map[start].value.end = end;
+  //block_map[start].hack_cache = end;
 
   for (uint64_t index = start + 1; index <= end; index++) {
     block_map[index].is_in_block = 1;
@@ -1907,8 +1890,7 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
       end_abs >= load_base + bin_size || 
       start_abs >= end_abs) {
     fprintf(stderr, "weird block @ [%lx,%lx]\n", start_abs, end_abs);
-    char * p = NULL;
-    *p = 0;
+    exit(-1);
   }
 
   uint64_t start = start_abs - load_base;
@@ -1919,12 +1901,20 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
   if (block_map[start].is_block_entry) {
     
     // exact match
-    if (block_map[start].value.end == end) {
-
+    if (block_map[start].value.end == end)
       return 1;
 
+#if 0
+    // a bad cache
+    if (block_map[start].hack_cache == end) {
+      //fprintf(stderr, "hit\n");
+      return 1;
+    } else 
+      block_map[start].hack_cache = end;
+#endif
+
     // the known block is larger, split it into two
-    } else if (block_map[start].value.end > end) {
+    if (block_map[start].value.end > end) {
 
       uint64_t old_end = block_map[start].value.end;
 
@@ -1999,71 +1989,10 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
   }
 }
 
-//HH: check whether we have seen this block or not
-static int is_block_seen(uint64_t start, uint64_t end)
-{
-  for (int i = 0; i < NUM_BLOCKS; i++){
-
-    //HH: reach the end, return false
-    if(blocks_array[i].start == 0 && blocks_array[i].end == 0 && block_range_cu == i)
-      return 0;
-
-    //HH: no overlap, continue
-    if(start > blocks_array[i].end || end < blocks_array[i].start)
-      continue;
-
-    //HH: Exact match, return true
-    if(start == blocks_array[i].start && end == blocks_array[i].end)
-      return 1;
-    
-    //HH: Start or end match, but not both, expand current block
-    //HH: if one is larger/smaller than what we have
-    if(start == blocks_array[i].start || end == blocks_array[i].end) {
-
-      if(start < blocks_array[i].start)
-        blocks_array[i].start = start;
-
-      if(end > blocks_array[i].end)
-        blocks_array[i].end = end;
-
-      return 1;
-    }
-    
-    if(start > blocks_array[i].start && start < blocks_array[i].end){
-
-      // Start is inside, but end is not same
-      // if is end is inside, then there is nothing to do
-      // block in array include new block
-      // but if end is outside, expand
-      if(end > blocks_array[i].end)
-        // end is outside, we need to expand this block
-        blocks_array[i].end = end;
-
-      return 1;
-
-
-    }else if(end < blocks_array[i].end && end > blocks_array[i].start){
-      // end is inside, but start is not same, and is not inside.. 
-      // Then is must have started before.. expand
-      blocks_array[i].start = start;
-      return 1;
-    }else if(blocks_array[i].start > start && blocks_array[i].start < end 
-        && blocks_array[i].end > start && blocks_array[i].end < end){
-      // We have the larger block, the block in array is included in the new block
-      blocks_array[i].start = start;
-      blocks_array[i].end = end;
-      return 1;
-
-    }
-  }
-  return 0;
-}
-
+//HH: this function has to be very fast, as very block will invoke it
 static int print_decode_to_debloat(struct ptxed_decoder *decoder,
     const struct pt_block *block, int decoder_status)
 {
-  uint16_t ninsn;
-  uint64_t range_end;
   struct pt_insn insn;
   struct pt_insn_ext iext;
   struct pt_block_decoder *ptdec;
@@ -2078,19 +2007,14 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
   }
 
   /* There's nothing to do for empty blocks. */
-  ninsn = block->ninsn;
-  if (!ninsn)
+  if (!block->ninsn)
     return decoder_status;
 
-  uint64_t range_start = block->ip;
 
   /* We need to decode the last inst to get its length */
   status = block_fetch_last_insn(&insn, block, decoder->iscache, &inst);
   if(status != 0)
     return decoder_status;
-  range_end = block->end_ip + xed_decoded_inst_get_length(&inst) -1;
-
-  update_block_map(range_start, range_end);
 
   /* We need to know how this block ended? */
 
@@ -2099,32 +2023,33 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
   decoder_status = get_disabled_event_ip(&next_ip, decoder, decoder_status);
 
   // The next ip is in-trace, we dont need events
-  if(next_ip == 0)
+  if(next_ip == 0) {
     next_ip = ptdec->ip;
 
-  // We still dont have a next ip!!
-  if(next_ip == 0) {
-    printf("Something is wrong! I cant get the next ip!!");
-    printf("[internal error]\n");
-    return decoder_status;
+    // We still dont have a next ip!!
+    if(next_ip == 0) {
+      printf("Something is wrong! I cant get the next ip!!");
+      printf("[internal error]\n");
+      return decoder_status;
+    }
   }
 
   pt_ild_decode(&insn, &iext);
+
+  uint64_t range_start = block->ip;
+  uint64_t range_end = block->end_ip + insn.size - 1;
+  update_block_map(range_start, range_end);
 
   switch (insn.iclass) {
     // A conditional branch
     case ptic_cond_jump: {
 
       //HH: calculate the falling-through address
-      uint64_t branch_ip;
-      branch_ip = insn.ip + insn.size;
-      branch_ip += (uint64_t) (int64_t) iext.variant.branch.displacement;
+      uint64_t fallthrough_ip = insn.ip + insn.size;
 
       // Was this branch taken?
-      enum tnt_type taken;
-      if(branch_ip == next_ip)
-        taken = TNT_T;
-      else
+      enum tnt_type taken = TNT_T;
+      if(next_ip == fallthrough_ip)
         taken = TNT_NT;
 
       update_branch_map(insn.ip, taken);
@@ -2146,7 +2071,6 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
       break;
     }
   }
-
 
   return decoder_status;
 }
