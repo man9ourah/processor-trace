@@ -71,29 +71,6 @@
 //HH: we only support 20M binary
 #define MAX_BIN_SIZE ((1 << 20) * 20)
 
-// Conditional instructions
-struct cnd_inst {
-  uint64_t ip;
-  uint32_t taken:2;
-};
-
-// Indirect call/jumps
-struct ind_inst {
-  uint64_t ip;
-  uint64_t dest_ips[NUM_IND_HOPS];
-  int dest_ips_length;
-};
-
-struct block_range {
-  uint64_t start;
-  uint64_t end;
-};
-
-/* Let's make vectors of our structs:  */
-struct cnd_inst cnd_inst_array[NUM_CND_INST];
-struct ind_inst ind_inst_array[NUM_IND_INST];
-struct block_range blocks_array[NUM_BLOCKS];
-
 //HH: use an array to represent the code section
 uint64_t load_base = 0;
 uint64_t bin_size = 0;
@@ -127,11 +104,6 @@ struct icall {
 struct block  block_map[MAX_BIN_SIZE];
 uint8_t      branch_map[MAX_BIN_SIZE];
 struct icall *icall_map[MAX_BIN_SIZE];
-
-/* Let's make curs of our structs:  */
-int cnd_inst_cu = 0;
-int ind_inst_cu = 0;
-int block_range_cu = 0;
 
 /* The type of decoder to be used. */
 enum ptxed_decoder_type {
@@ -1825,6 +1797,9 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
     return -1;
   }
 
+  return 0;
+
+  /*
   xed_decoded_inst_zero_set_mode(inst, &xed);
 
   xederrcode = xed_decode(inst, insn->raw, insn->size);
@@ -1836,6 +1811,7 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
     return -1;
   }
   return 0;
+  */
 }
 
 
@@ -2019,6 +1995,7 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
   /* We need to know how this block ended? */
 
   uint64_t next_ip = 0ull;
+
   // Did we get out of trace?? we must have branched out, lets get the ip..
   decoder_status = get_disabled_event_ip(&next_ip, decoder, decoder_status);
 
@@ -2133,11 +2110,6 @@ static void decode_block_to_debloat(struct ptxed_decoder *decoder,
   struct pt_image_section_cache *iscache;
   struct pt_block_decoder *ptdec;
   uint64_t offset, sync, time;
-
-  //memset(blocks_array, 0, NUM_BLOCKS * sizeof(struct block_range));
-  memset(cnd_inst_array, 0, NUM_CND_INST * sizeof(struct cnd_inst));
-  memset(ind_inst_array, 0, NUM_IND_INST * sizeof(struct ind_inst));
-
 
   iscache = decoder->iscache;
   ptdec = decoder->variant.block;
