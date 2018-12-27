@@ -88,7 +88,7 @@ struct block {
                            // 1 - INST_CNDJ - conditional jump
                            // 2 - INST_INDC - indirect call/jump
 
-  uint32_t inst_size;      // hold the instruction size
+  uint8_t inst_size;      // hold the instruction size
 
   union {
     uint64_t end;          // if is_block_entry, the block end address
@@ -1856,7 +1856,6 @@ static int create_new_block(uint64_t start, uint64_t end) {
 
   block_map[start].is_block_entry = 1;
   block_map[start].value.end = end;
-  //block_map[start].hack_cache = end;
 
   for (uint64_t index = start + 1; index <= end; index++) {
     block_map[index].is_in_block = 1;
@@ -1882,42 +1881,10 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
   uint64_t size = end_abs - start_abs + 1;
 
   // case A: the entry has been seen 
+  //
+  // hmm, I think one entry only has one end
+  //         (but one end may have multiple entries)
   if (block_map[start].is_block_entry) {
-    
-    // exact match
-    if (block_map[start].value.end == end)
-      return 1;
-
-#if 0
-    // a bad cache
-    if (block_map[start].hack_cache == end) {
-      //fprintf(stderr, "hit\n");
-      return 1;
-    } else 
-      block_map[start].hack_cache = end;
-#endif
-
-    // the known block is larger, split it into two
-    if (block_map[start].value.end > end) {
-
-      uint64_t old_end = block_map[start].value.end;
-
-      // shrink the known block
-      block_map[start].value.end = end;
-
-      // create a new block
-      uint64_t new_start = end + 1;
-      uint64_t new_end   = old_end;
-
-      create_new_block(end + 1, new_end);
-
-    // the known block is smaller
-    } else if (block_map[start].value.end < end) {
-      uint64_t new_start_abs = block_map[start].value.end + 1 + load_base;
-      uint64_t new_end_abs   = end_abs;
-
-      update_block_map(new_start_abs, new_end_abs);
-    }
 
     return 1;
 
