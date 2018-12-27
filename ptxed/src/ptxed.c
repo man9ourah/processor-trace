@@ -71,6 +71,10 @@
 //HH: we only support 20M binary
 #define MAX_BIN_SIZE ((1 << 20) * 20)
 
+#define INST_NONE   0
+#define INST_CNDJ   1
+#define INST_INDC   2
+
 //HH: use an array to represent the code section
 uint64_t load_base = 0;
 uint64_t bin_size = 0;
@@ -80,8 +84,12 @@ uint64_t last_block_end = 0;
 struct block {
   uint8_t  is_block_entry;
   uint8_t  is_in_block;
-  uint32_t hack_cache;     // it is unlikely to process a binary larger than 32G,
-                           // so just hack this padding for cache;
+  uint8_t  inst_type;      // 0 - INST_NONE - not interesting
+                           // 1 - INST_CNDJ - conditional jump
+                           // 2 - INST_INDC - indirect call/jump
+
+  uint32_t inst_size;      // hold the instruction size
+
   union {
     uint64_t end;          // if is_block_entry, the block end address
     uint64_t start;        // else if is_in_block, the block start address
@@ -1783,13 +1791,13 @@ static int get_disabled_event_ip(uint64_t *next_ip, struct ptxed_decoder *decode
 static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *block, 
     struct pt_image_section_cache *iscache, xed_decoded_inst_t *inst)
 {
-  xed_machine_mode_enum_t mode;
-  xed_state_t xed;
-  xed_error_enum_t xederrcode;
+  //xed_machine_mode_enum_t mode;
+  //xed_state_t xed;
+  //xed_error_enum_t xederrcode;
   int errcode;
 
-  mode = translate_mode(block->mode);
-  xed_state_init2(&xed, mode, XED_ADDRESS_WIDTH_INVALID);
+  //mode = translate_mode(block->mode);
+  //xed_state_init2(&xed, mode, XED_ADDRESS_WIDTH_INVALID);
 
   errcode = block_fetch_insn(insn, block, block->end_ip, iscache);
   if (errcode < 0) {
@@ -1965,6 +1973,27 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
   }
 }
 
+//HH: get next_ip
+static inline int get_next_ip(struct ptxed_decoder *decoder, struct pt_block_decoder *ptdec, 
+    int decoder_status, uint64_t * p_next_ip) {
+  // Did we get out of trace?? we must have branched out, lets get the ip..
+  decoder_status = get_disabled_event_ip(p_next_ip, decoder, decoder_status);
+
+  // The next ip is in-trace, we dont need events
+  if(*p_next_ip == 0) {
+    *p_next_ip = ptdec->ip;
+
+    // We still dont have a next ip!!
+    if(*p_next_ip == 0) {
+      printf("Something is wrong! I cant get the next ip!!");
+      printf("[internal error]\n");
+      return decoder_status;
+    }
+  }
+
+  return decoder_status;
+}
+
 //HH: this function has to be very fast, as very block will invoke it
 static int print_decode_to_debloat(struct ptxed_decoder *decoder,
     const struct pt_block *block, int decoder_status)
@@ -1974,6 +2003,9 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
   struct pt_block_decoder *ptdec;
   xed_decoded_inst_t inst;
   int status;
+
+  int is_cond_jump = 0;
+  int is_icall_jump = 0;
 
   ptdec = decoder->variant.block;
 
@@ -1986,67 +2018,85 @@ static int print_decode_to_debloat(struct ptxed_decoder *decoder,
   if (!block->ninsn)
     return decoder_status;
 
+  insn.ip = block->end_ip;
 
-  /* We need to decode the last inst to get its length */
-  status = block_fetch_last_insn(&insn, block, decoder->iscache, &inst);
-  if(status != 0)
-    return decoder_status;
+  if (block_map[insn.ip - load_base].inst_type == INST_NONE) {
 
-  /* We need to know how this block ended? */
-
-  uint64_t next_ip = 0ull;
-
-  // Did we get out of trace?? we must have branched out, lets get the ip..
-  decoder_status = get_disabled_event_ip(&next_ip, decoder, decoder_status);
-
-  // The next ip is in-trace, we dont need events
-  if(next_ip == 0) {
-    next_ip = ptdec->ip;
-
-    // We still dont have a next ip!!
-    if(next_ip == 0) {
-      printf("Something is wrong! I cant get the next ip!!");
-      printf("[internal error]\n");
+    /* We need to decode the last inst to get its length */
+    status = block_fetch_last_insn(&insn, block, decoder->iscache, &inst);
+    if(status != 0)
       return decoder_status;
-    }
-  }
 
-  pt_ild_decode(&insn, &iext);
+    /* We need to know how this block ended? */
+    pt_ild_decode(&insn, &iext);
+    
+    switch (insn.iclass) {
+      // A conditional branch
+      case ptic_cond_jump:
+        is_cond_jump = 1;
+        block_map[insn.ip - load_base].inst_type = INST_CNDJ;;
+        block_map[insn.ip - load_base].inst_size = insn.size;
+        break;
+
+      // All classes of jump/call
+      case ptic_jump:
+      case ptic_call:
+      case ptic_far_call:
+      case ptic_far_return:
+      case ptic_far_jump:
+        // We only care for indirect ones
+        if (iext.variant.branch.is_direct)
+          break;
+
+        is_icall_jump = 1;
+        block_map[insn.ip - load_base].inst_type = INST_INDC;;
+        block_map[insn.ip - load_base].inst_size = insn.size;
+        break;
+
+      default:
+        break;
+    }
+  } else if (block_map[insn.ip - load_base].inst_type == INST_CNDJ) {
+
+    is_cond_jump = 1;
+    insn.size = block_map[insn.ip - load_base].inst_size;
+
+  } else if (block_map[insn.ip - load_base].inst_type == INST_INDC) {
+    
+    is_icall_jump = 1;
+    insn.size = block_map[insn.ip - load_base].inst_size;
+
+  }
 
   uint64_t range_start = block->ip;
   uint64_t range_end = block->end_ip + insn.size - 1;
   update_block_map(range_start, range_end);
 
-  switch (insn.iclass) {
-    // A conditional branch
-    case ptic_cond_jump: {
+  // A conditional branch
+  if (is_cond_jump) {
+    //HH: calculate the falling-through address
+    uint64_t fallthrough_ip = insn.ip + insn.size;
 
-      //HH: calculate the falling-through address
-      uint64_t fallthrough_ip = insn.ip + insn.size;
+    //HH: calculate the real next IP
+    uint64_t next_ip = 0ull;
+    decoder_status = get_next_ip(decoder, ptdec, decoder_status, &next_ip);
 
-      // Was this branch taken?
-      enum tnt_type taken = TNT_T;
-      if(next_ip == fallthrough_ip)
-        taken = TNT_NT;
+    // Was this branch taken?
+    enum tnt_type taken = TNT_T;
 
-      update_branch_map(insn.ip, taken);
+    if(next_ip == fallthrough_ip)
+      taken = TNT_NT;
 
-      break;
-    }
-    // All classes of jump/call
-    case ptic_jump:
-    case ptic_call:
-    case ptic_far_call:
-    case ptic_far_return:
-    case ptic_far_jump: {
-      // We only care for indirect ones
-      if (iext.variant.branch.is_direct)
-        break;
+    update_branch_map(insn.ip, taken);
 
-      update_icall_map(insn.ip, next_ip);
+  // indirect call/jump
+  } else if (is_icall_jump) {
 
-      break;
-    }
+    //HH: calculate the real next IP
+    uint64_t next_ip = 0ull;
+    decoder_status = get_next_ip(decoder, ptdec, decoder_status, &next_ip);
+
+    update_icall_map(insn.ip, next_ip);
   }
 
   return decoder_status;
