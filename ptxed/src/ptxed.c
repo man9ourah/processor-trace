@@ -1905,9 +1905,6 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
     uint64_t new_end   = old_end;
     create_new_block(new_start, new_end);
 
-
-    update_block_map(start_abs, end_abs);
-
     return 1;
 
   // case C: the start falls into an non-block region
@@ -1929,12 +1926,6 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
     }
 
     create_new_block(start, the_end);
-
-    if (the_end < end) {
-      uint64_t new_start_abs = the_end + 1 + load_base;
-      uint64_t new_end_abs   = end_abs;
-      update_block_map(new_start_abs, new_end_abs);
-    }
 
     return 1;
   }
