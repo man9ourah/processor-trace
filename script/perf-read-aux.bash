@@ -95,7 +95,6 @@ fi
 
 perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
   function handle_auxtrace(offset, hsize, size, idx) {
-	  print idx 
 
     ibs = 1024 * 1024
     ext = ""
@@ -151,10 +150,6 @@ perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
     size   = strtonum($7)
     idx    = strtonum($13)
 
-		print "hh"
-		print $0
-		print idx
-
     handle_auxtrace(offset, hsize, size, idx)
   }
 
@@ -164,10 +159,6 @@ perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
     size   = strtonum($6)
     idx    = strtonum($12)
 
-		print "hh"
-		print $0
-		print idx
-
     handle_auxtrace(offset, hsize, size, idx)
   }
 
@@ -176,10 +167,6 @@ perf script --no-itrace -i "$file" -D | gawk -F' ' -- '
     hsize  = strtonum(substr($2, 2))
     size   = strtonum($5)
     idx    = strtonum($11)
-
-		print "hh"
-		print $0
-		print idx
 
     handle_auxtrace(offset, hsize, size, idx)
   }
