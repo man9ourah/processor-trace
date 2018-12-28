@@ -1791,13 +1791,7 @@ static int get_disabled_event_ip(uint64_t *next_ip, struct ptxed_decoder *decode
 static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *block, 
     struct pt_image_section_cache *iscache, xed_decoded_inst_t *inst)
 {
-  //xed_machine_mode_enum_t mode;
-  //xed_state_t xed;
-  //xed_error_enum_t xederrcode;
   int errcode;
-
-  //mode = translate_mode(block->mode);
-  //xed_state_init2(&xed, mode, XED_ADDRESS_WIDTH_INVALID);
 
   errcode = block_fetch_insn(insn, block, block->end_ip, iscache);
   if (errcode < 0) {
@@ -1806,20 +1800,6 @@ static int block_fetch_last_insn(struct pt_insn *insn, const struct pt_block *bl
   }
 
   return 0;
-
-  /*
-  xed_decoded_inst_zero_set_mode(inst, &xed);
-
-  xederrcode = xed_decode(inst, insn->raw, insn->size);
-  if (xederrcode != XED_ERROR_NONE) {
-    print_raw_insn(insn);
-
-    printf(" [xed decode error: (%u) %s]\n", xederrcode,
-        xed_error_enum_t2str(xederrcode));
-    return -1;
-  }
-  return 0;
-  */
 }
 
 
