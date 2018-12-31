@@ -69,7 +69,7 @@
 #define BRANCH_BOTH 3
 
 //HH: we only support 20M binary
-#define MAX_BIN_SIZE ((1 << 20) * 20)
+#define MAX_BIN_SIZE ((1 << 20) * 100)
 
 #define INST_NONE   0
 #define INST_CNDJ   1
@@ -1851,8 +1851,9 @@ static int update_block_map(uint64_t start_abs, uint64_t end_abs) {
 
   if (start_abs < load_base || 
       end_abs >= load_base + bin_size || 
-      start_abs >= end_abs) {
+      start_abs > end_abs) {
     fprintf(stderr, "weird block @ [%lx,%lx]\n", start_abs, end_abs);
+		fprintf(stderr, "while binary @ [%lx,%lx]\n", load_base, load_base + bin_size);
     exit(-1);
   }
 
